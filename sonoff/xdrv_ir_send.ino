@@ -95,7 +95,7 @@ boolean ir_send_command(char *type, uint16_t index, char *dataBufUc, uint16_t da
       StaticJsonBuffer<128> jsonBuf;
       JsonObject &ir_json = jsonBuf.parseObject(dataBufUc);
       if (!ir_json.success()) {
-        snprintf_P(svalue, ssvalue, PSTR("{\"IRSend\":\"Invalid JSON\"}"));  // JSON decode failed 
+        snprintf_P(svalue, ssvalue, PSTR("{\"IRSend\":\"Invalid JSON\"}"));  // JSON decode failed
       } else {
         snprintf_P(svalue, ssvalue, PSTR("{\"IRSend\":\"Done\"}"));
         protocol = ir_json["PROTOCOL"];
@@ -109,6 +109,7 @@ boolean ir_send_command(char *type, uint16_t index, char *dataBufUc, uint16_t da
           else if (!strcmp_P(protocol,PSTR("DISH")))    irsend->sendDISH(data, bits);
           else if (!strcmp_P(protocol,PSTR("JVC")))     irsend->sendJVC(data, bits, 1);
           else if (!strcmp_P(protocol,PSTR("SAMSUNG"))) irsend->sendSAMSUNG(data, bits);
+          else if (!strcmp(protocol,"LG"))      irsend->sendLG(data, bits);
           else {
             snprintf_P(svalue, ssvalue, PSTR("{\"IRSend\":\"Protocol not supported\"}"));
           }
@@ -137,7 +138,7 @@ boolean ir_send_command(char *type, uint16_t index, char *dataBufUc, uint16_t da
 //        snprintf_P(log, sizeof(log), PSTR("IRHVAC: Received Vendor %s, Power %d, Mode %s, FanSpeed %s, Temp %d"),
 //          HVAC_Vendor, HVAC_Power, HVAC_Mode, HVAC_FanMode, HVAC_Temp);
 //        addLog(LOG_LEVEL_DEBUG, log);
-        
+
         if (HVAC_Vendor == NULL || !strcmp_P(HVAC_Vendor,PSTR("TOSHIBA"))) {
           error = ir_hvac_toshiba(HVAC_Mode, HVAC_FanMode, HVAC_Power, HVAC_Temp);
         }
@@ -190,7 +191,7 @@ boolean ir_hvac_toshiba(const char *HVAC_Mode, const char *HVAC_FanMode, boolean
   if (!p) {
     return true;
   }
-  mode = p - FANSPEED +1;    
+  mode = p - FANSPEED +1;
   if ((1 == mode) || (7 == mode)) {
     mode = 0;
   }
@@ -253,7 +254,7 @@ boolean ir_hvac_mitsubishi(const char *HVAC_Mode,const char *HVAC_FanMode, boole
   char *token;
   uint8_t mode;
   char log[LOGSZ];
-    
+
   mitsubir->stateReset();
 
   if (HVAC_Mode == NULL) {
@@ -283,11 +284,11 @@ boolean ir_hvac_mitsubishi(const char *HVAC_Mode,const char *HVAC_FanMode, boole
   mitsubir->setTemp(HVAC_Temp);
   mitsubir->setVane(MITSUBISHI_AC_VANE_AUTO);
   mitsubir->send();
-  
+
 //  snprintf_P(log, sizeof(log), PSTR("IRHVAC: Mitsubishi Power %d, Mode %d, FanSpeed %d, Temp %d, VaneMode %d"),
 //    mitsubir->getPower(), mitsubir->getMode(), mitsubir->getFan(), mitsubir->getTemp(), mitsubir->getVane());
 //  addLog(LOG_LEVEL_DEBUG, log);
-  
+
   return false;
 }
 #endif  // USE_IR_HVAC
