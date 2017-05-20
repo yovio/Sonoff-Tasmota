@@ -1,26 +1,20 @@
 /*
- Copyright (c) 2017 Theo Arends.  All rights reserved.
+  xsns_sht1x.ino - SHT1x temperature and sensor support for Sonoff-Tasmota
 
- Redistribution and use in source and binary forms, with or without
- modification, are permitted provided that the following conditions are met:
+  Copyright (C) 2017  Theo Arends
 
- - Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- - Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
 
- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- POSSIBILITY OF SUCH DAMAGE.
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #ifdef USE_I2C
@@ -161,9 +155,7 @@ boolean sht_readTempHum(float &t, float &h)
   const float t2 = 0.00008;
   rhLinear = c1 + c2 * humRaw + c3 * humRaw * humRaw;
   h = (t - 25) * (t1 + t2 * humRaw) + rhLinear;
-  if (!isnan(t) && TEMP_CONVERSION) {
-    t = t * 1.8 + 32;
-  }
+  t = convertTemp(t);
   return (!isnan(t) && !isnan(h));
 }
 
@@ -173,8 +165,8 @@ boolean sht_readCharTempHum(char* temp, char* hum)
   float h;
 
   boolean success = sht_readTempHum(t, h);
-  dtostrf(t, 1, TEMP_RESOLUTION &3, temp);
-  dtostrf(h, 1, HUMIDITY_RESOLUTION &3, hum);
+  dtostrf(t, 1, sysCfg.flag.temperature_resolution, temp);
+  dtostrf(h, 1, sysCfg.flag.humidity_resolution, hum);
   return success;
 }
 
@@ -231,7 +223,7 @@ String sht_webPresent()
     
     if (sht_readCharTempHum(stemp, shum)) {
       char sensor[80];
-      snprintf_P(sensor, sizeof(sensor), HTTP_SNS_TEMP, "SHT1X", stemp, (TEMP_CONVERSION) ? 'F' : 'C');
+      snprintf_P(sensor, sizeof(sensor), HTTP_SNS_TEMP, "SHT1X", stemp, tempUnit());
       page += sensor;
       snprintf_P(sensor, sizeof(sensor), HTTP_SNS_HUM, "SHT1X", shum);
       page += sensor;

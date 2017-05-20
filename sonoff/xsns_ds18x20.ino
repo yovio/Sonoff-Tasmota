@@ -1,26 +1,20 @@
 /*
-Copyright (c) 2017 Theo Arends.  All rights reserved.
+  xsns_ds18x20.ino - DS18x20 temperature sensor support for Sonoff-Tasmota
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+  Copyright (C) 2017  Heiko Krupp and Theo Arends
 
-- Redistributions of source code must retain the above copyright notice,
-  this list of conditions and the following disclaimer.
-- Redistributions in binary form must reproduce the above copyright notice,
-  this list of conditions and the following disclaimer in the documentation
-  and/or other materials provided with the distribution.
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-POSSIBILITY OF SUCH DAMAGE.
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #ifdef USE_DS18x20
@@ -107,12 +101,7 @@ void ds18x20_convert()
 //  delay(750);                   // 750ms should be enough for 12bit conv
 }
 
-float ds18x20_convertCtoF(float c)
-{
-  return c * 1.8 + 32;
-}
-
-boolean ds18x20_read(uint8_t sensor, bool S, float &t)
+boolean ds18x20_read(uint8_t sensor, float &t)
 {
   byte data[12];
   int8_t sign = 1;
@@ -155,10 +144,7 @@ boolean ds18x20_read(uint8_t sensor, bool S, float &t)
       } else {
         temp9 = (data[0] >> 1) * sign;
       }
-      t = (temp9 - 0.25) + ((16.0 - data[6]) / 16.0);
-      if(S) {
-        t = ds18x20_convertCtoF(t);
-      }
+      t = convertTemp((temp9 - 0.25) + ((16.0 - data[6]) / 16.0));
       break;
     case DS18B20_CHIPID:   // DS18B20
     case MAX31850_CHIPID:  // MAX31850
@@ -167,10 +153,7 @@ boolean ds18x20_read(uint8_t sensor, bool S, float &t)
         temp12 = (~temp12) +1;
         sign = -1;
       }
-      t = sign * temp12 * 0.0625;
-      if(S) {
-        t = ds18x20_convertCtoF(t);
-      }
+      t = convertTemp(sign * temp12 * 0.0625);
       break;
     }
   }
@@ -205,9 +188,9 @@ void ds18x20_mqttPresent(char* svalue, uint16_t ssvalue, uint8_t* djson)
 
   byte dsxflg = 0;
   for (byte i = 0; i < ds18x20_sensors(); i++) {
-    if (ds18x20_read(i, TEMP_CONVERSION, t)) {           // Check if read failed
+    if (ds18x20_read(i, t)) {           // Check if read failed
       ds18x20_type(i);
-      dtostrf(t, 1, TEMP_RESOLUTION &3, stemp2);
+      dtostrf(t, 1, sysCfg.flag.temperature_resolution, stemp2);
       if (!dsxflg) {
         snprintf_P(svalue, ssvalue, PSTR("%s, \"DS18x20\":{"), svalue);
         *djson = 1;
@@ -237,11 +220,11 @@ String ds18x20_webPresent()
   float t;
 
   for (byte i = 0; i < ds18x20_sensors(); i++) {
-    if (ds18x20_read(i, TEMP_CONVERSION, t)) {   // Check if read failed
+    if (ds18x20_read(i, t)) {   // Check if read failed
       ds18x20_type(i);
-      dtostrf(t, 1, TEMP_RESOLUTION &3, stemp);
+      dtostrf(t, 1, sysCfg.flag.temperature_resolution, stemp);
       snprintf_P(stemp2, sizeof(stemp2), PSTR("%s-%d"), dsbstype, i +1);
-      snprintf_P(sensor, sizeof(sensor), HTTP_SNS_TEMP, stemp2, stemp, (TEMP_CONVERSION) ? 'F' : 'C');
+      snprintf_P(sensor, sizeof(sensor), HTTP_SNS_TEMP, stemp2, stemp, tempUnit());
       page += sensor;
     }
   }

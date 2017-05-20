@@ -1,26 +1,20 @@
 /*
- Copyright (c) 2017 Heiko Krupp and Theo Arends.  All rights reserved.
+  xsns_bmp.ino - BMP pressure, temperature and humidity sensor support for Sonoff-Tasmota
 
- Redistribution and use in source and binary forms, with or without
- modification, are permitted provided that the following conditions are met:
+  Copyright (C) 2017  Heiko Krupp and Theo Arends
 
- - Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- - Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
 
- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- POSSIBILITY OF SUCH DAMAGE.
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #ifdef USE_I2C
@@ -351,12 +345,7 @@ double bme280_readHumidity(void)
  * BMP
 \*********************************************************************************************/
 
-double bmp_convertCtoF(double c)
-{
-  return c * 1.8 + 32;
-}
-
-double bmp_readTemperature(bool S)
+double bmp_readTemperature(void)
 {
   double t = NAN;
   
@@ -369,9 +358,7 @@ double bmp_readTemperature(bool S)
     t = bmp280_readTemperature();
   }
   if (!isnan(t)) {
-    if (S) {
-      t = bmp_convertCtoF(t);
-    }
+    t = convertTemp(t);
     return t;
   }
   return 0;
@@ -453,12 +440,12 @@ void bmp_mqttPresent(char* svalue, uint16_t ssvalue, uint8_t* djson)
   char stemp2[10];
   char stemp3[10];
 
-  double t = bmp_readTemperature(TEMP_CONVERSION);
+  double t = bmp_readTemperature();
   double p = bmp_readPressure();
   double h = bmp_readHumidity();
-  dtostrf(t, 1, TEMP_RESOLUTION &3, stemp1);
-  dtostrf(p, 1, PRESSURE_RESOLUTION &3, stemp2);
-  dtostrf(h, 1, HUMIDITY_RESOLUTION &3, stemp3);
+  dtostrf(t, 1, sysCfg.flag.temperature_resolution, stemp1);
+  dtostrf(p, 1, sysCfg.flag.pressure_resolution, stemp2);
+  dtostrf(h, 1, sysCfg.flag.humidity_resolution, stemp3);
   if (!strcmp(bmpstype,"BME280")) {
     snprintf_P(svalue, ssvalue, PSTR("%s, \"%s\":{\"Temperature\":%s, \"Humidity\":%s, \"Pressure\":%s}"),
       svalue, bmpstype, stemp1, stemp3, stemp2);
@@ -480,18 +467,18 @@ String bmp_webPresent()
     char stemp[10];
     char sensor[80];
 
-    double t_bmp = bmp_readTemperature(TEMP_CONVERSION);
+    double t_bmp = bmp_readTemperature();
     double p_bmp = bmp_readPressure();
     double h_bmp = bmp_readHumidity();
-    dtostrf(t_bmp, 1, TEMP_RESOLUTION &3, stemp);
-    snprintf_P(sensor, sizeof(sensor), HTTP_SNS_TEMP, bmpstype, stemp, (TEMP_CONVERSION) ? 'F' : 'C');
+    dtostrf(t_bmp, 1, sysCfg.flag.temperature_resolution, stemp);
+    snprintf_P(sensor, sizeof(sensor), HTTP_SNS_TEMP, bmpstype, stemp, tempUnit());
     page += sensor;
     if (!strcmp(bmpstype,"BME280")) {
-      dtostrf(h_bmp, 1, HUMIDITY_RESOLUTION &3, stemp);
+      dtostrf(h_bmp, 1, sysCfg.flag.humidity_resolution, stemp);
       snprintf_P(sensor, sizeof(sensor), HTTP_SNS_HUM, bmpstype, stemp);
       page += sensor;
     }
-    dtostrf(p_bmp, 1, PRESSURE_RESOLUTION &3, stemp);
+    dtostrf(p_bmp, 1, sysCfg.flag.pressure_resolution, stemp);
     snprintf_P(sensor, sizeof(sensor), HTTP_SNS_PRESSURE, bmpstype, stemp);
     page += sensor;
   }

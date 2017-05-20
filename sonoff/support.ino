@@ -1,26 +1,20 @@
 /*
-Copyright (c) 2017 Theo Arends.  All rights reserved.
+  support.ino - support for Sonoff-Tasmota
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+  Copyright (C) 2017  Theo Arends
 
-- Redistributions of source code must retain the above copyright notice,
-  this list of conditions and the following disclaimer.
-- Redistributions in binary form must reproduce the above copyright notice,
-  this list of conditions and the following disclaimer in the documentation
-  and/or other materials provided with the distribution.
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-POSSIBILITY OF SUCH DAMAGE.
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 const char JSON_SNS_TEMPHUM[] PROGMEM =
@@ -176,8 +170,8 @@ boolean parseIP(uint32_t* addr, const char* str)
  * Wifi
 \*********************************************************************************************/
 
-#define WIFI_CONFIG_SEC   60   // seconds before restart
-#define WIFI_MANAGER_SEC  120  // seconds before restart
+#define WIFI_CONFIG_SEC   180  // seconds before restart
+#define WIFI_MANAGER_SEC  180  // seconds before restart
 #define WIFI_CHECK_SEC    20   // seconds
 #define WIFI_RETRY_SEC    30   // seconds
 
@@ -309,8 +303,8 @@ void WIFI_begin(uint8_t flag)
 #ifdef USE_EMULATION
   UDP_Disconnect();
 #endif  // USE_EMULATION
-  if (!strncmp(ESP.getSdkVersion(),"1.5.3",5)) {
-    addLog_P(LOG_LEVEL_DEBUG, "Wifi: Patch issue 2186");
+  if (!strncmp_P(ESP.getSdkVersion(),PSTR("1.5.3"),5)) {
+    addLog_P(LOG_LEVEL_DEBUG, PSTR("Wifi: Patch issue 2186"));
     WiFi.mode(WIFI_OFF);    // See https://github.com/esp8266/Arduino/issues/2186
   }
   WiFi.disconnect();
@@ -475,7 +469,7 @@ void WIFI_Check(uint8_t param)
           stopWebserver();
         }
 #ifdef USE_EMULATION
-        if (sysCfg.emulation) {
+        if (sysCfg.flag.emulation) {
           UDP_Connect();
         }
 #endif  // USE_EMULATION
@@ -688,6 +682,7 @@ uint32_t dsttime = 0;
 uint32_t stdtime = 0;
 uint32_t ntptime = 0;
 uint32_t midnight = 1451602800;
+uint8_t  midnightnow = 0;
 
 String getBuildDateTime()
 {
@@ -873,6 +868,15 @@ uint32_t rtc_midnight()
   return midnight;
 }
 
+boolean rtc_midnight_now()
+{
+  boolean mnflg = midnightnow;
+  if (mnflg) {
+    midnightnow = 0;
+  }
+  return mnflg;
+}
+
 void rtc_second()
 {
   char log[LOGSZ];
@@ -925,6 +929,7 @@ void rtc_second()
   breakTime(loctime, rtcTime);
   if (!rtcTime.Hour && !rtcTime.Minute && !rtcTime.Second && rtcTime.Valid) {
     midnight = loctime;
+    midnightnow = 1;
   }
   rtcTime.Year += 1970;
 }
@@ -940,6 +945,89 @@ void rtc_init()
   utctime = 0;
   breakTime(utctime, rtcTime);
   tickerRTC.attach(1, rtc_second);
+}
+
+/*********************************************************************************************\
+ * Counter sensors (water meters, electricity meters etc.)
+\*********************************************************************************************/
+
+void counter_update(byte index)
+{
+//  char log[LOGSZ];
+
+  unsigned long pTime = millis() - pTimeLast[index -1];
+  if (pTime > sysCfg.pCounterDebounce) {
+    pTimeLast[index -1] = millis();
+    if (bitRead(sysCfg.pCounterType, index -1)) {
+      rtcMem.pCounter[index -1] = pTime;
+    } else {
+      rtcMem.pCounter[index -1]++;
+    }
+
+//    snprintf_P(log, sizeof(log), PSTR("CNTR: Interrupt %d"), index);
+//    addLog(LOG_LEVEL_DEBUG, log);
+  }
+}
+
+void counter_update1()
+{
+  counter_update(1);
+}
+
+void counter_update2()
+{
+  counter_update(2);
+}
+
+void counter_update3()
+{
+  counter_update(3);
+}
+
+void counter_update4()
+{
+  counter_update(4);
+}
+
+void counter_savestate()
+{
+  for (byte i = 0; i < 4; i++) {
+    if (pin[GPIO_CNTR1 +i] < 99) {
+      sysCfg.pCounter[i] = rtcMem.pCounter[i];
+    }
+  }
+}
+
+void counter_init()
+{
+  typedef void (*function) () ;
+  function counter_callbacks[] = { counter_update1, counter_update2, counter_update3, counter_update4 };
+  
+  for (byte i = 0; i < 4; i++) {
+    if (pin[GPIO_CNTR1 +i] < 99) {
+      pinMode(pin[GPIO_CNTR1 +i], INPUT_PULLUP);
+      attachInterrupt(pin[GPIO_CNTR1 +i], counter_callbacks[i], FALLING);
+    }
+  }
+}
+
+/*********************************************************************************************\
+ * Miscellaneous
+\*********************************************************************************************/
+
+float convertTemp(float c)
+{
+  float result = c;
+  
+  if (!isnan(c) && sysCfg.flag.temperature_conversion) {
+    result = c * 1.8 + 32;  // Fahrenheit
+  }
+  return result;
+}
+
+char tempUnit()
+{
+  return (sysCfg.flag.temperature_conversion) ? 'F' : 'C';
 }
 
 /*********************************************************************************************\
