@@ -1,4 +1,14 @@
-/* 5.1.7 20170616
+/* 5.2.1 20170622
+ * Fix Restore Configuration in case of lower version
+ * Revert auto configuration upgrade allowing easy upgrade which was removed in version 5.2.0 
+ * Fix config auto upgrade from versions below version 4.1.1 (#530)
+ *
+ * 5.2.0 20170619
+ * Add command SetOption12 1 to disable newly released configuration flash rotate to reduce flash wear
+ * Fix command CounterDebounce by removing test for active GPIO (#524)
+ * Add command SetOption33 1..250 to allow user configure POW Max_Power_Retry count (#525)
+ *
+ * 5.1.7 20170616
  * Prep removal of SetOptions alternatives
  * Restore webpage upgrade error messages removed in 5.1.5
  * Add hold button functionality to buttons 2 to 4

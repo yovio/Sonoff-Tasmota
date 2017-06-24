@@ -1177,6 +1177,7 @@ void handleUploadLoop()
       _uploaderror = 1;
       return;
     }
+    CFG_Save(1);  // Free flash for upload
     snprintf_P(log, sizeof(log), PSTR("Upload: File %s ..."), upload.filename.c_str());
     addLog(LOG_LEVEL_INFO, log);
     if (!_uploadfiletype) {
@@ -1231,6 +1232,10 @@ void handleUploadLoop()
         }
         CFG_DefaultSet2();
         memcpy((char*)&sysCfg +16, upload.buf +16, upload.currentSize -16);
+        
+        memcpy((char*)&sysCfg +8, upload.buf +8, 4);  // Restore version and auto upgrade
+//        CFG_Delta();
+        
       }
     } else {  // firmware
       if (!_uploaderror && (Update.write(upload.buf, upload.currentSize) != upload.currentSize)) {

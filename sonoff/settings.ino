@@ -129,8 +129,11 @@ extern "C" uint32_t _SPIFFS_end;
 
 // Version 4.2 config = eeprom area
 #define CFG_LOCATION        SPIFFS_END  // No need for SPIFFS as it uses EEPROM area
+// Version 5.2 allow for more flash space
+#define CFG_ROTATES         8           // Number of additional flash sectors used (handles uploads)
 
 uint32_t _cfgHash = 0;
+uint32_t _cfgLocation = CFG_LOCATION;
 
 /********************************************************************************************/
 /*
@@ -192,18 +195,38 @@ uint32_t getHash()
  * Config Save - Save parameters to Flash ONLY if any parameter has changed
 \*********************************************************************************************/
 
-void CFG_Save()
+void CFG_Save(byte force)
 {
   char log[LOGSZ];
 
 #ifndef BE_MINIMAL
-  if (getHash() != _cfgHash) {
-    noInterrupts();
+  if ((getHash() != _cfgHash) || force) {
+    if (sysCfg.flag.stop_flash_rotate) {
+      _cfgLocation = CFG_LOCATION;
+    } else {
+      if (force) {
+        _cfgLocation = CFG_LOCATION;
+      } else {
+        _cfgLocation--;
+        if (_cfgLocation <= (CFG_LOCATION - CFG_ROTATES)) {
+          _cfgLocation = CFG_LOCATION;
+        }
+      }
+    }
     sysCfg.saveFlag++;
-    spi_flash_erase_sector(CFG_LOCATION);
-    spi_flash_write(CFG_LOCATION * SPI_FLASH_SEC_SIZE, (uint32*)&sysCfg, sizeof(SYSCFG));
+    noInterrupts();
+    spi_flash_erase_sector(_cfgLocation);
+    spi_flash_write(_cfgLocation * SPI_FLASH_SEC_SIZE, (uint32*)&sysCfg, sizeof(SYSCFG));
     interrupts();
-    snprintf_P(log, sizeof(log), PSTR("Config: Saved configuration (%d bytes) to flash at %X and count %d"), sizeof(SYSCFG), CFG_LOCATION, sysCfg.saveFlag);
+    if (!sysCfg.flag.stop_flash_rotate && force) {
+      for (byte i = 1; i < CFG_ROTATES; i++) {
+        noInterrupts();
+        spi_flash_erase_sector(_cfgLocation -i);  // Delete previous configurations by resetting to 0xFF
+        interrupts();
+        delay(1);
+      }
+    }
+    snprintf_P(log, sizeof(log), PSTR("Cnfg: %s (%d bytes) to flash at %X and count %d"), (force) ? "Backup" : "Save", sizeof(SYSCFG), _cfgLocation, sysCfg.saveFlag);
     addLog(LOG_LEVEL_DEBUG, log);
     _cfgHash = getHash();
   }
@@ -220,13 +243,31 @@ void CFG_Load()
     unsigned long saveFlag;
   } _sysCfgH;
 
-  noInterrupts();
-  spi_flash_read(CFG_LOCATION * SPI_FLASH_SEC_SIZE, (uint32*)&sysCfg, sizeof(SYSCFG));
-  interrupts();
-  snprintf_P(log, sizeof(log), PSTR("Config: Loaded configuration from flash at %X and count %d"), CFG_LOCATION, sysCfg.saveFlag);
-  addLog(LOG_LEVEL_DEBUG, log);
+  _cfgLocation = CFG_LOCATION +1;
+  for (byte i = 0; i < CFG_ROTATES; i++) {
+    _cfgLocation--;
+    noInterrupts();
+    spi_flash_read(_cfgLocation * SPI_FLASH_SEC_SIZE, (uint32*)&sysCfg, sizeof(SYSCFG));
+    spi_flash_read((_cfgLocation -1) * SPI_FLASH_SEC_SIZE, (uint32*)&_sysCfgH, sizeof(SYSCFGH));
+    interrupts();
 
+//  snprintf_P(log, sizeof(log), PSTR("Cnfg: Check at %X with count %d and holder %X"), _cfgLocation -1, _sysCfgH.saveFlag, _sysCfgH.cfg_holder);
+//  addLog(LOG_LEVEL_DEBUG, log);
+
+    if (sysCfg.flag.stop_flash_rotate || (sysCfg.cfg_holder != _sysCfgH.cfg_holder) || (sysCfg.saveFlag > _sysCfgH.saveFlag)) {
+      break;
+    }
+    delay(1);
+  }
+  snprintf_P(log, sizeof(log), PSTR("Cnfg: Load from flash at %X and count %d"), _cfgLocation, sysCfg.saveFlag);
+  addLog(LOG_LEVEL_DEBUG, log);
+/*  
   if (sysCfg.cfg_holder != CFG_HOLDER) {
+    CFG_Default();
+  }
+*/
+  if (sysCfg.cfg_holder != CFG_HOLDER) {
+    // Auto upgrade
     if ((sysCfg.version < 0x04020000) || (sysCfg.version > 0x06000000)) {
       noInterrupts();
       spi_flash_read((CFG_LOCATION_3) * SPI_FLASH_SEC_SIZE, (uint32*)&sysCfg, sizeof(SYSCFG));
@@ -243,6 +284,7 @@ void CFG_Load()
       CFG_Default();
     }
   }
+  
   _cfgHash = getHash();
 
   RTC_Load();
@@ -257,7 +299,7 @@ void CFG_Erase()
   uint32_t _sectorEnd = ESP.getFlashChipRealSize() / SPI_FLASH_SEC_SIZE;
   boolean _serialoutput = (LOG_LEVEL_DEBUG_MORE <= seriallog_level);
 
-  snprintf_P(log, sizeof(log), PSTR("Config: Erasing %d flash sectors"), _sectorEnd - _sectorStart);
+  snprintf_P(log, sizeof(log), PSTR("Cnfg: Erase %d flash sectors"), _sectorEnd - _sectorStart);
   addLog(LOG_LEVEL_DEBUG, log);
 
   for (uint32_t _sector = _sectorStart; _sector < _sectorEnd; _sector++) {
@@ -325,10 +367,10 @@ void CFG_Dump(uint16_t srow, uint16_t mrow)
 
 void CFG_Default()
 {
-  addLog_P(LOG_LEVEL_NONE, PSTR("Config: Use default configuration"));
+  addLog_P(LOG_LEVEL_NONE, PSTR("Cnfg: Use defaults"));
   CFG_DefaultSet1();
   CFG_DefaultSet2();
-  CFG_Save();
+  CFG_Save(1);
 }
 
 void CFG_DefaultSet1()
@@ -459,6 +501,9 @@ void CFG_DefaultSet2()
 
   // 5.1.7
   sysCfg.param[P_HOLD_TIME] = KEY_HOLD_TIME;  // Default 4 seconds hold time
+
+  // 5.2.0
+  sysCfg.param[P_MAX_POWER_RETRY] = MAX_POWER_RETRY;
 
 }
 
@@ -651,14 +696,20 @@ void CFG_Delta()
       }
     }
     if (sysCfg.version < 0x05010600) {
-      memcpy(sysCfg.state_text, sysCfg.ex_state_text, 33);
+      if (sysCfg.version > 0x04010100) {
+        memcpy(sysCfg.state_text, sysCfg.ex_state_text, 33);
+      }
       strlcpy(sysCfg.state_text[3], MQTT_CMND_HOLD, sizeof(sysCfg.state_text[3]));
     }
     if (sysCfg.version < 0x05010700) {
       sysCfg.param[P_HOLD_TIME] = KEY_HOLD_TIME;  // Default 4 seconds hold time
     }
+    if (sysCfg.version < 0x05020000) {
+      sysCfg.param[P_MAX_POWER_RETRY] = MAX_POWER_RETRY;
+    }
     
     sysCfg.version = VERSION;
+    CFG_Save(1);
   }
 }
 
