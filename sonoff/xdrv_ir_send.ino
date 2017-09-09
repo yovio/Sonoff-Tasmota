@@ -84,17 +84,17 @@ boolean ir_send_command(char *type, uint16_t index, char *dataBufUc, uint16_t da
 
 //  char log[LOGSZ];
 
-  if (!strcmp_P(type,PSTR("IRSEND"))) {
+  if (!strcasecmp_P(type, PSTR(D_CMND_IRSEND))) {
 	  if (data_len) {
       StaticJsonBuffer<128> jsonBuf;
       JsonObject &ir_json = jsonBuf.parseObject(dataBufUc);
       if (!ir_json.success()) {
-        snprintf_P(svalue, ssvalue, PSTR("{\"IRSend\":\"Invalid JSON\"}"));  // JSON decode failed
+        snprintf_P(svalue, ssvalue, PSTR("{\"" D_CMND_IRSEND "\":\"" D_INVALID_JSON "\"}"));  // JSON decode failed
       } else {
-        snprintf_P(svalue, ssvalue, PSTR("{\"IRSend\":\"Done\"}"));
-        protocol = ir_json["PROTOCOL"];
-        bits = ir_json["BITS"];
-        data = ir_json["DATA"];
+        snprintf_P(svalue, ssvalue, PSTR("{\"" D_CMND_IRSEND "\":\"" D_DONE "\"}"));
+        protocol = ir_json[D_IRSEND_PROTOCOL];
+        bits = ir_json[D_IRSEND_BITS];
+        data = ir_json[D_IRSEND_DATA];
         if (protocol && bits && data) {
           if      (!strcmp_P(protocol,PSTR("NEC")))     irsend->sendNEC(data, bits);
           else if (!strcmp_P(protocol,PSTR("SONY")))    irsend->sendSony(data, bits);
@@ -105,29 +105,29 @@ boolean ir_send_command(char *type, uint16_t index, char *dataBufUc, uint16_t da
           else if (!strcmp_P(protocol,PSTR("SAMSUNG"))) irsend->sendSAMSUNG(data, bits);
           else if (!strcmp(protocol,"LG"))      irsend->sendLG(data, bits);
           else {
-            snprintf_P(svalue, ssvalue, PSTR("{\"IRSend\":\"Protocol not supported\"}"));
+            snprintf_P(svalue, ssvalue, PSTR("{\"" D_CMND_IRSEND "\":\"" D_PROTOCOL_NOT_SUPPORTED "\"}"));
           }
         } else error = true;
       }
     } else error = true;
     if (error) {
-      snprintf_P(svalue, ssvalue, PSTR("{\"IRSend\":\"No protocol, bits or data\"}"));
+      snprintf_P(svalue, ssvalue, PSTR("{\"" D_CMND_IRSEND "\":\"" D_NO D_IRSEND_PROTOCOL ", " D_IRSEND_BITS " " D_OR " " D_IRSEND_DATA "\"}"));
     }
   }
 #ifdef USE_IR_HVAC
-  else if (!strcmp_P(type,PSTR("IRHVAC"))) {
+  else if (!strcasecmp_P(type, PSTR(D_CMND_IRHVAC))) {
     if (data_len) {
       StaticJsonBuffer<164> jsonBufer;
       JsonObject &root = jsonBufer.parseObject(dataBufUc);
       if (!root.success()) {
-        snprintf_P(svalue, ssvalue, PSTR("{\"IRHVAC\":\"Invalid JSON\"}"));  // JSON decode failed
+        snprintf_P(svalue, ssvalue, PSTR("{\"" D_CMND_IRHVAC "\":\"" D_INVALID_JSON "\"}"));  // JSON decode failed
       } else {
-        snprintf_P(svalue, ssvalue, PSTR("{\"IRHVAC\":\"Done\"}"));
-        HVAC_Vendor = root["VENDOR"];
-        HVAC_Power = root["POWER"];
-        HVAC_Mode = root["MODE"];
-        HVAC_FanMode = root["FANSPEED"];
-        HVAC_Temp = root["TEMP"];
+        snprintf_P(svalue, ssvalue, PSTR("{\"" D_CMND_IRHVAC "\":\"" D_DONE "\"}"));
+        HVAC_Vendor = root[D_IRHVAC_VENDOR];
+        HVAC_Power = root[D_IRHVAC_POWER];
+        HVAC_Mode = root[D_IRHVAC_MODE];
+        HVAC_FanMode = root[D_IRHVAC_FANSPEED];
+        HVAC_Temp = root[D_IRHVAC_TEMP];
 
 //        snprintf_P(log, sizeof(log), PSTR("IRHVAC: Received Vendor %s, Power %d, Mode %s, FanSpeed %s, Temp %d"),
 //          HVAC_Vendor, HVAC_Power, HVAC_Mode, HVAC_FanMode, HVAC_Temp);
@@ -143,7 +143,7 @@ boolean ir_send_command(char *type, uint16_t index, char *dataBufUc, uint16_t da
       }
     } else error = true;
     if (error) {
-      snprintf_P(svalue, ssvalue, PSTR("{\"IRHVAC\":\"Wrong Vendor, Mode and/or FanSpeed\"}"));
+      snprintf_P(svalue, ssvalue, PSTR("{\"" D_CMND_IRHVAC "\":\"" D_WRONG D_IRHVAC_VENDOR ", " D_IRHVAC_MODE " " D_OR " " D_IRHVAC_FANSPEED "\"}"));
     }
   }
 #endif  // USE_IR_HVAC
@@ -262,7 +262,7 @@ boolean ir_hvac_mitsubishi(const char *HVAC_Mode,const char *HVAC_FanMode, boole
   mode = (p - HVACMODE +1) << 3;  // HOT = 0x08, DRY = 0x10, COOL = 0x18, AUTO = 0x20
   mitsubir->setMode(mode);
 
-  mitsubir->setPower(~HVAC_Power);
+  mitsubir->setPower(HVAC_Power);
 
   if (HVAC_FanMode == NULL) {
     p = (char*)FANSPEED;  // default FAN_SPEED_AUTO

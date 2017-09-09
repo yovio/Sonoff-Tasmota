@@ -1,7 +1,7 @@
 /*
   xdrv_snfsc.ino - sonoff SC support for Sonoff-Tasmota
 
-  Copyright (C) 2017  Heiko Krupp and Theo Arends
+  Copyright (C) 2017  Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -106,11 +106,10 @@ void sc_mqttPresent(char* svalue, uint16_t ssvalue, uint8_t* djson)
     char stemp2[10];
 
     float t = convertTemp(sc_value[1]);
-    dtostrf(t, 1, sysCfg.flag.temperature_resolution, stemp1);
+    dtostrfd(t, sysCfg.flag.temperature_resolution, stemp1);
     float h = sc_value[0];
-    dtostrf(h, 1, sysCfg.flag.humidity_resolution, stemp2);
-//    snprintf_P(svalue, ssvalue, PSTR("%s, \"SC\":{\"Temperature\":%s, \"Humidity\":%s, \"Light\":%d, \"Noise\":%d, \"AirQuality\":%d}"),
-    snprintf_P(svalue, ssvalue, PSTR("%s, \"Temperature\":%s, \"Humidity\":%s, \"Light\":%d, \"Noise\":%d, \"AirQuality\":%d"),
+    dtostrfd(h, sysCfg.flag.humidity_resolution, stemp2);
+    snprintf_P(svalue, ssvalue, PSTR("%s, \"" D_TEMPERATURE "\":%s, \"" D_HUMIDITY "\":%s, \"" D_LIGHT "\":%d, \"" D_NOISE "\":%d, \"" D_AIRQUALITY "\":%d"),
       svalue, stemp1, stemp2, sc_value[2], sc_value[3], sc_value[4]);
     *djson = 1;
 #ifdef USE_DOMOTICZ
@@ -131,11 +130,11 @@ String sc_webPresent()
     char scstype[] = "";
 
     float t = convertTemp(sc_value[1]);
-    dtostrf(t, 1, sysCfg.flag.temperature_resolution, stemp);
+    dtostrfi(t, sysCfg.flag.temperature_resolution, stemp);
     snprintf_P(sensor, sizeof(sensor), HTTP_SNS_TEMP, scstype, stemp, tempUnit());
     page += sensor;
     float h = sc_value[0];
-    dtostrf(h, 1, sysCfg.flag.humidity_resolution, stemp);
+    dtostrfi(h, sysCfg.flag.humidity_resolution, stemp);
     snprintf_P(sensor, sizeof(sensor), HTTP_SNS_HUM, scstype, stemp);
     page += sensor;
     snprintf_P(sensor, sizeof(sensor), HTTP_SNS_LIGHT, scstype, sc_value[2]);
